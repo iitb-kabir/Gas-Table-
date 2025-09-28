@@ -26,9 +26,8 @@ p.lead{margin:0 0 18px 0;color:#bcd7ee}
 label{display:block;font-size:13px;margin-bottom:6px;color:#cfe9ff}
 select,input[type='number'],input[type='text']{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:var(--glass);color:inherit;outline:none;box-sizing: border-box;}
 
-/* This is the added rule to fix the dropdown text color */
 select option {
-    color: black;
+    color: black; /* Fix for dropdown text color in some browsers */
 }
 
 .row{display:flex;gap:12px}
@@ -81,7 +80,7 @@ select option {
                     </div>
                     <div class="group">
                         <label for="isen-value">Input Value</label>
-                        <input type="number" id="isen-value" name="isen_value" required step="any">
+                        <input type="number" id="isen-value" name="isen_value" required step="any" placeholder="e.g., 2.0">
                     </div>
                     <div class="group hidden" id="sub-super-choice">
                         <label>Flow Regime (for A/A*)</label>
@@ -93,9 +92,20 @@ select option {
                 </div>
                 
                 <div id="normal-shock-inputs" class="hidden">
+                     <div class="group">
+                        <label for="ns-type">Input Type</label>
+                        <select id="ns-type" name="ns_type">
+                            <option value="m1">Upstream Mach (M1)</option>
+                            <option value="m2">Downstream Mach (M2)</option>
+                            <option value="p2_p1">p2/p1</option>
+                            <option value="rho2_rho1">rho2/rho1</option>
+                            <option value="t2_t1">T2/T1</option>
+                            <option value="po2_po1">Po2/Po1</option>
+                        </select>
+                    </div>
                     <div class="group">
-                        <label for="ns-m1">Upstream Mach (M1)</label>
-                        <input type="number" id="ns-m1" name="ns_m1" value="2.0" step="0.01">
+                        <label for="ns-value">Input Value</label>
+                        <input type="number" id="ns-value" name="ns_value" step="any" placeholder="e.g., 2.0">
                     </div>
                 </div>
 
@@ -104,11 +114,21 @@ select option {
                         <label for="os-m1">Upstream Mach (M1)</label>
                         <input type="number" id="os-m1" name="os_m1" value="3.0" step="0.01">
                     </div>
-                     <div class="group">
-                        <label for="os-theta">Turn Angle (θ) in degrees</label>
-                        <input type="number" id="os-theta" name="os_theta" value="10" step="0.1">
+                    <div class="row">
+                        <div class="group small">
+                            <label for="os-type">Input Type</label>
+                            <select id="os-type" name="os_type">
+                                <option value="theta">Turn angle (θ)</option>
+                                <option value="beta">Wave angle (β)</option>
+                                <option value="m1n">Normal Mach (M1n)</option>
+                            </select>
+                        </div>
+                         <div class="group small">
+                            <label for="os-value" id="os-value-label">Angle Value (degrees)</label>
+                            <input type="number" id="os-value" name="os_value" value="10" step="any">
+                        </div>
                     </div>
-                     <div class="group">
+                     <div class="group" id="weak-strong-choice">
                         <label>Solution Type</label>
                          <div style="display: flex; gap: 15px;">
                             <label><input type="radio" name="os_weak" value="true" checked> Weak Shock</label>
@@ -130,38 +150,74 @@ select option {
 <script>
     const form = document.getElementById('calc-form');
     const flowTypeSelect = document.getElementById('flow-type');
+    
+    // Input sections
     const isenInputs = document.getElementById('isentropic-inputs');
     const nsInputs = document.getElementById('normal-shock-inputs');
     const osInputs = document.getElementById('oblique-shock-inputs');
+
+    // Dynamic UI elements
     const isenTypeSelect = document.getElementById('isen-type');
     const subSuperChoice = document.getElementById('sub-super-choice');
+    const osTypeSelect = document.getElementById('os-type');
+    const weakStrongChoice = document.getElementById('weak-strong-choice');
+    const osValueLabel = document.getElementById('os-value-label');
+
     const resultsOutput = document.getElementById('results-output');
 
-    // Show/hide input sections based on flow type
-    flowTypeSelect.addEventListener('change', () => {
+    function updateVisibleInputs() {
         const selectedType = flowTypeSelect.value;
         isenInputs.classList.toggle('hidden', selectedType !== 'Isentropic');
         nsInputs.classList.toggle('hidden', selectedType !== 'Normal Shock');
         osInputs.classList.toggle('hidden', selectedType !== 'Oblique Shock');
-    });
+    }
 
-    // Show/hide subsonic/supersonic choice for A/A*
+    function updateObliqueInputs() {
+        const selected = osTypeSelect.value;
+        // The weak/strong choice is only relevant when solving for beta from theta
+        weakStrongChoice.classList.toggle('hidden', selected !== 'theta');
+        
+        // Update the label for the input value to be more descriptive
+        if (selected === 'theta' || selected === 'beta') {
+            osValueLabel.textContent = 'Angle Value (degrees)';
+        } else if (selected === 'm1n') {
+            osValueLabel.textContent = 'M1n Value';
+        }
+    }
+
+    // Event listener to switch between main calculator types
+    flowTypeSelect.addEventListener('change', updateVisibleInputs);
+
+    // Event listener for isentropic-specific UI
     isenTypeSelect.addEventListener('change', () => {
         subSuperChoice.classList.toggle('hidden', isenTypeSelect.value !== 'a_a_star');
     });
+    
+    // Event listener for oblique-specific UI
+    osTypeSelect.addEventListener('change', updateObliqueInputs);
 
+    // Main form submission logic
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         resultsOutput.innerHTML = '<p>Calculating...</p>';
 
         const formData = new FormData(form);
         const data = {};
-        formData.forEach((value, key) => { data[key] = value; });
+        formData.forEach((value, key) => {
+            if (value !== '') data[key] = value;
+        });
 
-        // Convert radio button values to boolean
-        if (data.isen_sub) data.isen_sub = (data.isen_sub === 'true');
-        if (data.os_weak) data.os_weak = (data.os_weak === 'true');
-        
+        // Convert radio button strings to boolean where applicable
+        if (data.hasOwnProperty('isen_sub')) {
+            data.isen_sub = (data.isen_sub === 'true');
+        }
+        if (data.hasOwnProperty('os_weak')) {
+            data.os_weak = (data.os_weak === 'true');
+        } else if (osTypeSelect.value !== 'theta') {
+            // Ensure os_weak is not sent if it's hidden
+            delete data.os_weak;
+        }
+
         try {
             const response = await fetch('/calculate', {
                 method: 'POST',
@@ -173,21 +229,24 @@ select option {
 
             if (results.error) {
                 resultsOutput.innerHTML = `<p class="error-msg">Error: ${results.error}</p>`;
-                return;
+            } else {
+                let html = '<div class="results-grid">';
+                for (const key in results) {
+                    html += `<span>${key}:</span><span>${results[key]}</span>`;
+                }
+                html += '</div>';
+                resultsOutput.innerHTML = html;
             }
-
-            let html = '<div class="results-grid">';
-            for (const key in results) {
-                html += `<span>${key}:</span><span>${results[key]}</span>`;
-            }
-            html += '</div>';
-            resultsOutput.innerHTML = html;
 
         } catch (error) {
             resultsOutput.innerHTML = `<p class="error-msg">A network or server error occurred.</p>`;
             console.error('Error:', error);
         }
     });
+    
+    // Set the initial state of the UI when the page loads
+    updateVisibleInputs();
+    updateObliqueInputs();
 </script>
 
 </body>
