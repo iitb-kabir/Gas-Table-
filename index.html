@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Compressible Flow Calculator</title>
+<style>
+/* Modern colorful UI with soft glass effect */
+:root{
+--bg: linear-gradient(135deg,#0f172a 0%, #031124 100%);
+--card: rgba(255,255,255,0.06);
+--accent1: #7c3aed; /* purple */
+--accent2: #06b6d4; /* cyan */
+--glass: rgba(255,255,255,0.04);
+--glass-2: rgba(255,255,255,0.02);
+--radius: 14px;
+--mono: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+html,body{height:100%;margin:0;font-family:var(--mono);background:var(--bg);color:#e6eef8}
+.wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px}
+.card{width:900px;max-width:95vw;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:var(--radius);box-shadow:0 10px 30px rgba(2,6,23,0.7);display:grid;grid-template-columns:1fr 420px;gap:20px;padding:24px}
+.left{padding:18px}
+h1{margin:0 0 6px 0;font-size:20px}
+p.lead{margin:0 0 18px 0;color:#bcd7ee}
+.group{margin-bottom:12px}
+label{display:block;font-size:13px;margin-bottom:6px;color:#cfe9ff}
+select,input[type='number'],input[type='text']{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:var(--glass);color:inherit;outline:none;box-sizing: border-box;}
+
+/* This is the added rule to fix the dropdown text color */
+select option {
+    color: black;
+}
+
+.row{display:flex;gap:12px}
+.small{flex:1}
+.btn{display:inline-block;padding:10px 14px;border-radius:10px;border:none;cursor:pointer;font-weight:600;background:linear-gradient(90deg,var(--accent1),var(--accent2));color:white;box-shadow:0 6px 18px rgba(12,6,20,0.6)}
+.btn:active{transform:translateY(1px)}
+.output{background:linear-gradient(180deg, rgba(0,0,0,0.24), rgba(255,255,255,0.02));padding:12px;border-radius:12px;height:100%;overflow:auto;border:1px solid rgba(255,255,255,0.03)}
+.hidden { display: none; }
+.results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 14px; }
+.results-grid span:nth-child(odd) { color: #a1c8ff; }
+.error-msg { color: #ff8b8b; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+    <div class="card">
+        <div class="left">
+            <h1>Compressible Flow Calculator</h1>
+            <p class="lead">Select a flow type and enter a known value to calculate all related properties.</p>
+            
+            <form id="calc-form">
+                <div class="row">
+                    <div class="group small">
+                        <label for="flow-type">Flow Type</label>
+                        <select id="flow-type" name="flow_type">
+                            <option value="Isentropic">Isentropic</option>
+                            <option value="Normal Shock">Normal Shock</option>
+                            <option value="Oblique Shock">Oblique Shock</option>
+                        </select>
+                    </div>
+                    <div class="group small">
+                        <label for="gamma">Gamma (γ)</label>
+                        <input type="number" id="gamma" name="gamma" value="1.4" step="0.01">
+                    </div>
+                </div>
+
+                <div id="isentropic-inputs">
+                    <div class="group">
+                        <label for="isen-type">Input Type</label>
+                        <select id="isen-type" name="isen_type">
+                            <option value="mach">Mach</option>
+                            <option value="p_p0">p/p0</option>
+                            <option value="rho_rho0">rho/rho0</option>
+                            <option value="t_t0">T/T0</option>
+                            <option value="a_a_star">A/A*</option>
+                            <option value="mach_angle">Mach angle (μ)</option>
+                            <option value="pm_angle">P-M angle (ν)</option>
+                        </select>
+                    </div>
+                    <div class="group">
+                        <label for="isen-value">Input Value</label>
+                        <input type="number" id="isen-value" name="isen_value" required step="any">
+                    </div>
+                    <div class="group hidden" id="sub-super-choice">
+                        <label>Flow Regime (for A/A*)</label>
+                        <div style="display: flex; gap: 15px;">
+                            <label><input type="radio" name="isen_sub" value="true" checked> Subsonic</label>
+                            <label><input type="radio" name="isen_sub" value="false"> Supersonic</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="normal-shock-inputs" class="hidden">
+                    <div class="group">
+                        <label for="ns-m1">Upstream Mach (M1)</label>
+                        <input type="number" id="ns-m1" name="ns_m1" value="2.0" step="0.01">
+                    </div>
+                </div>
+
+                <div id="oblique-shock-inputs" class="hidden">
+                    <div class="group">
+                        <label for="os-m1">Upstream Mach (M1)</label>
+                        <input type="number" id="os-m1" name="os_m1" value="3.0" step="0.01">
+                    </div>
+                     <div class="group">
+                        <label for="os-theta">Turn Angle (θ) in degrees</label>
+                        <input type="number" id="os-theta" name="os_theta" value="10" step="0.1">
+                    </div>
+                     <div class="group">
+                        <label>Solution Type</label>
+                         <div style="display: flex; gap: 15px;">
+                            <label><input type="radio" name="os_weak" value="true" checked> Weak Shock</label>
+                            <label><input type="radio" name="os_weak" value="false"> Strong Shock</label>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn">Calculate</button>
+            </form>
+        </div>
+
+        <div class="output">
+            <pre id="results-output"><p>Results will appear here...</p></pre>
+        </div>
+    </div>
+</div>
+
+<script>
+    const form = document.getElementById('calc-form');
+    const flowTypeSelect = document.getElementById('flow-type');
+    const isenInputs = document.getElementById('isentropic-inputs');
+    const nsInputs = document.getElementById('normal-shock-inputs');
+    const osInputs = document.getElementById('oblique-shock-inputs');
+    const isenTypeSelect = document.getElementById('isen-type');
+    const subSuperChoice = document.getElementById('sub-super-choice');
+    const resultsOutput = document.getElementById('results-output');
+
+    // Show/hide input sections based on flow type
+    flowTypeSelect.addEventListener('change', () => {
+        const selectedType = flowTypeSelect.value;
+        isenInputs.classList.toggle('hidden', selectedType !== 'Isentropic');
+        nsInputs.classList.toggle('hidden', selectedType !== 'Normal Shock');
+        osInputs.classList.toggle('hidden', selectedType !== 'Oblique Shock');
+    });
+
+    // Show/hide subsonic/supersonic choice for A/A*
+    isenTypeSelect.addEventListener('change', () => {
+        subSuperChoice.classList.toggle('hidden', isenTypeSelect.value !== 'a_a_star');
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        resultsOutput.innerHTML = '<p>Calculating...</p>';
+
+        const formData = new FormData(form);
+        const data = {};
+        formData.forEach((value, key) => { data[key] = value; });
+
+        // Convert radio button values to boolean
+        if (data.isen_sub) data.isen_sub = (data.isen_sub === 'true');
+        if (data.os_weak) data.os_weak = (data.os_weak === 'true');
+        
+        try {
+            const response = await fetch('/calculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const results = await response.json();
+
+            if (results.error) {
+                resultsOutput.innerHTML = `<p class="error-msg">Error: ${results.error}</p>`;
+                return;
+            }
+
+            let html = '<div class="results-grid">';
+            for (const key in results) {
+                html += `<span>${key}:</span><span>${results[key]}</span>`;
+            }
+            html += '</div>';
+            resultsOutput.innerHTML = html;
+
+        } catch (error) {
+            resultsOutput.innerHTML = `<p class="error-msg">A network or server error occurred.</p>`;
+            console.error('Error:', error);
+        }
+    });
+</script>
+
+</body>
+</html>
